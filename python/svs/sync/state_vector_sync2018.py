@@ -145,7 +145,7 @@ class StateVectorSync2018(object):
             return "SyncState(" + self._dataPrefixUri + ", " + str(self._sequenceNo) + ")"
 
         def __repr__(self):
-            self.__str__()
+            return self.__str__()
 
     def getProducerPrefixes(self):
         """
