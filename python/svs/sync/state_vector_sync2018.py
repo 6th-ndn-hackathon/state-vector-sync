@@ -340,6 +340,33 @@ class StateVectorSync2018(object):
         logging.getLogger(__name__).info("Received broadcast state vector %s",
           str(receivedStateVector))
 
+        syncStates = self._mergeStateVector(receivedStateVector)
+        try:
+            self._onReceivedSyncState(syncStates)
+        except:
+            logging.exception("Error in onReceivedSyncState")
+
+    def _mergeStateVector(self, receivedStateVector):
+        """
+        Merge receivedStateVector into self._stateVector and return the
+        updated entries.
+
+        :param dict<str,int> receivedStateVector: The received state vector
+          dictionary where the key is the member ID string and the value is
+          the sequence number.
+        :return: The list of new StateVectorSync2018.SyncState giving the
+          entries in myStateVector that were updated.
+        :rtype: list<StateVectorSync2018.SyncState>
+        """
+        result = []
+        for k, v in receivedStateVector.items():
+            mySequenceNumber = self._stateVector.get(k)
+            if mySequenceNumber == None or mySequenceNumber < v:
+                result.append(StateVectorSync2018.SyncState(k, v))
+                self._setSequenceNumber(k, v)
+
+        return result
+
     # Assign TLV types as crtitical values for application use.
     TLV_StateVector = 129
     TLV_StateVectorEntry = 131
