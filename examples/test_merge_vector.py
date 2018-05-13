@@ -16,7 +16,7 @@ def main():
     # check the same vector 1
     stateVector = {}
     receivedStateVector = {}
-    assert(not mergeStateVector(stateVector, receivedStateVector))
+    assert(mergeStateVector(stateVector, receivedStateVector) == ([], False))
     assert(stateVector == {})
     
     # check the same vector 2
@@ -26,7 +26,7 @@ def main():
     stateVector["/user2"] = 1
     receivedStateVector["/user1"] = 10
     receivedStateVector["/user2"] = 1
-    assert(not mergeStateVector(stateVector, receivedStateVector))
+    assert(mergeStateVector(stateVector, receivedStateVector) == ([], False))
     assert(stateVector == {'/user1': 10, '/user2': 1})
     
     # check new keys
@@ -37,7 +37,7 @@ def main():
     receivedStateVector["/user1"] = 10
     receivedStateVector["/user2"] = 1
     receivedStateVector["/user3"] = 20
-    assert(mergeStateVector(stateVector, receivedStateVector))
+    assert(mergeStateVector(stateVector, receivedStateVector) == ([StateVectorSync2018.SyncState('/user3', 20)], False))
     assert(stateVector == {'/user1': 10, '/user2': 1, '/user3': 20})
     
     # check updated values 1
@@ -47,7 +47,7 @@ def main():
     stateVector["/user2"] = 1
     receivedStateVector["/user1"] = 10
     receivedStateVector["/user2"] = 1
-    assert(mergeStateVector(stateVector, receivedStateVector))
+    assert(mergeStateVector(stateVector, receivedStateVector) == ([StateVectorSync2018.SyncState('/user1', 10)], False))
     assert(stateVector == {'/user1': 10, '/user2': 1})
     
     # check updated values 2
@@ -57,7 +57,7 @@ def main():
     stateVector["/user2"] = 1
     receivedStateVector["/user1"] = 10
     receivedStateVector["/user2"] = 2
-    assert(mergeStateVector(stateVector, receivedStateVector))
+    assert(mergeStateVector(stateVector, receivedStateVector) == ([StateVectorSync2018.SyncState('/user1', 10), StateVectorSync2018.SyncState('/user2', 2)], False))
     assert(stateVector == {'/user1': 10, '/user2': 2})
     
     # check updated values 3
@@ -67,25 +67,53 @@ def main():
     stateVector["/user2"] = 2
     receivedStateVector["/user1"] = 10
     receivedStateVector["/user2"] = 1
-    print mergeStateVector(stateVector, receivedStateVector)
+    assert(mergeStateVector(stateVector, receivedStateVector) == ([StateVectorSync2018.SyncState('/user1', 10)], True))
     assert(stateVector == {'/user1': 10, '/user2': 2})
     
+    # need to reply 1
+    stateVector = {}
+    receivedStateVector = {}
+    stateVector["/user1"] = 10
+    stateVector["/user2"] = 1
+    assert(mergeStateVector(stateVector, receivedStateVector) == ([], True))
+    assert(stateVector == {'/user1': 10, '/user2': 1})
+    
+    # need to reply 2
+    stateVector = {}
+    receivedStateVector = {}
+    stateVector["/user1"] = 10
+    stateVector["/user2"] = 1
+    stateVector["/user3"] = 20
+    receivedStateVector["/user1"] = 10
+    receivedStateVector["/user2"] = 1
+    assert(mergeStateVector(stateVector, receivedStateVector) == ([], True))
+    assert(stateVector == {'/user1': 10, '/user2': 1, '/user3': 20})
+    
     # mix scennario
+    stateVector = {}
+    receivedStateVector = {}
     stateVector["/user1"] = 10
     stateVector["/user2"] = 1
     receivedStateVector["/user1"] = 9
     receivedStateVector["/user2"] = 2
     receivedStateVector["/user3"] = 20
-    assert(mergeStateVector(stateVector, receivedStateVector))
+    assert(mergeStateVector(stateVector, receivedStateVector) == ([StateVectorSync2018.SyncState('/user2', 2), StateVectorSync2018.SyncState('/user3', 20)], True))
     assert(stateVector == {'/user1': 10, '/user2': 2, '/user3': 20})
 
     # Merge receivedStateVector into stateVector.
 def mergeStateVector(myStateVector, receivedStateVector):
+    needToReply = False
     result = []
+    if myStateVector == receivedStateVector:
+        return (result, needToReply)
     for k, v in receivedStateVector.items():
         if myStateVector.get(k) == None or myStateVector.get(k) < v:
             result.append(StateVectorSync2018.SyncState(k,v))
             myStateVector[k] = v
-    return result
+    for k, v in myStateVector.items():
+        if receivedStateVector.get(k) == None or receivedStateVector.get(k) < v:
+            needToReply = True
+            break
+    return (result, needToReply)
 
 main()
