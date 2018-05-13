@@ -262,7 +262,8 @@ class Chat(object):
 
     @staticmethod
     def _chatTimeout(interest):
-        print("Timeout waiting for chat data")
+        #debug print("Timeout waiting for chat data")
+        pass
 
     def _heartbeat(self, interest):
         """
