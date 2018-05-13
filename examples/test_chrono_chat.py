@@ -299,7 +299,7 @@ class Chat(object):
         method has an "interest" argument because we use it as the onTimeout for
         Face.expressInterest.
         """
-        sequenceNo = self._sync.getProducerSequenceNo(prefix, sessionNo)
+        sequenceNo = self._sync.getProducerSequenceNo(prefix)
         nameAndSession = name + sessionNo
         try:
             n = self._roster.index(nameAndSession)
