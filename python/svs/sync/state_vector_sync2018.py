@@ -22,6 +22,8 @@ from pyndn.name import Name
 from pyndn.interest import Interest
 from pyndn.data import Data
 from pyndn.util.blob import Blob
+from pyndn.encoding.tlv.tlv_encoder import TlvEncoder
+from pyndn.encoding.tlv.tlv_decoder import TlvDecoder
 from pyndn.util.memory_content_cache import MemoryContentCache
 
 class StateVectorSync2018(object):
@@ -98,7 +100,11 @@ class StateVectorSync2018(object):
         self._notificationInterestLifetime = notificationInterestLifetime
         self._contentCache = MemoryContentCache(face)
 
-        self._stateVector = []  # list of SyncState
+        # The dictionary key is member ID string. The value is the sequence number.
+        self._stateVector = {}
+        # The keys of _stateVector in sorted order, kept in sync with _stateVector.
+        # (We don't use OrderedDict because it doesn't sort keys on insert.)
+        self._sortedStateVectorKeys = []
         self._sequenceNo = previousSequenceNumber
         self._enabled = True
 
@@ -145,7 +151,8 @@ class StateVectorSync2018(object):
         :return: A copy of the list of each producer data prefix.
         :rtype: array of str
         """
-        pass
+        # Just return a copy of the keys of the state vector dictionary.
+        return self._sortedStateVectorKeys[:]
 
     def getProducerSequenceNo(self, producerDataPrefix):
         """
@@ -158,7 +165,10 @@ class StateVectorSync2018(object):
           the producerDataPrefix is not in the state vector.
         :rtype: int
         """
-        pass
+        if producerDataPrefix in self._stateVector:
+            return self._stateVector[producerDataPrefix]
+        else:
+            return -1
 
     def publishNextSequenceNo(self):
         """
@@ -198,3 +208,76 @@ class StateVectorSync2018(object):
         """
         self._enabled = False
         self._contentCache.unregisterAll()
+
+    @staticmethod
+    def encodeStateVector(stateVector, stateVectorKeys):
+        """
+        Encode the stateVector as TLV.
+
+        :param dict<str,int> stateVector: The state vector dictionary where
+          the key is the member ID string and the value is the sequence number.
+        :param list<str> stateVectorKeys: The key strings of stateVector,
+          sorted in the order to be encoded.
+        :return: A Blob containing the encoding.
+        :rtype: Blob
+        """
+        encoder = TlvEncoder(256)
+        saveLength = len(encoder)
+
+        # Encode backwards.
+        for i in range(len(stateVectorKeys) - 1, -1, -1):
+            saveLengthForEntry = len(encoder)
+
+            encoder.writeNonNegativeIntegerTlv(
+              StateVectorSync2018.TLV_StateVector_SequenceNumber,
+              stateVector[stateVectorKeys[i]])
+            encoder.writeBlobTlv(StateVectorSync2018.TLV_StateVector_MemberId,
+              Blob(stateVectorKeys[i]).buf())
+            encoder.writeTypeAndLength(StateVectorSync2018.TLV_StateVectorEntry,
+              len(encoder) - saveLengthForEntry)
+
+        encoder.writeTypeAndLength(StateVectorSync2018.TLV_StateVector,
+          len(encoder) - saveLength)
+
+        return Blob(encoder.getOutput(), False)
+
+    @staticmethod
+    def decodeStateVector(input):
+        """
+        Decode the input as a TLV state vector.
+
+        :param input: The array with the bytes to decode.
+        :type input: An array type with int elements
+        :return: A new dictionary where the key is the member ID string and the
+          value is the sequence number. If the input encoding has repeated
+          entries with the same member ID, this uses only the last entry.
+        :rtype: dict<str,int>
+        :raises ValueError: For invalid encoding.
+        """
+        stateVector = {}
+
+        # If input is a blob, get its buf().
+        decodeBuffer = input.buf() if isinstance(input, Blob) else input
+        decoder = TlvDecoder(decodeBuffer)
+
+        endOffset = decoder.readNestedTlvsStart(StateVectorSync2018.TLV_StateVector)
+
+        while decoder.getOffset() < endOffset:
+            entryEndOffset = decoder.readNestedTlvsStart(
+              StateVectorSync2018.TLV_StateVectorEntry)
+
+            memberIdBlob = Blob(decoder.readBlobTlv(
+              StateVectorSync2018.TLV_StateVector_MemberId), False)
+            stateVector[str(memberIdBlob)] = decoder.readNonNegativeIntegerTlv(
+              StateVectorSync2018.TLV_StateVector_SequenceNumber)
+            decoder.finishNestedTlvs(entryEndOffset)
+
+        decoder.finishNestedTlvs(endOffset)
+
+        return stateVector
+
+    # Assign TLV types as crtitical values for application use.
+    TLV_StateVector = 129
+    TLV_StateVectorEntry = 131
+    TLV_StateVector_MemberId = 133
+    TLV_StateVector_SequenceNumber = 135
