@@ -343,7 +343,19 @@ class StateVectorSync2018(object):
         """
         Process a received broadcast interest.
         """
-        # TODO: Verify the HMAC signature.
+        # Verify the HMAC signature.
+        verified = False
+        try:
+            verified = KeyChain.verifyInterestWithHmacWithSha256(
+              interest, self._hmacKey)
+        except:
+            # Treat a decoding failure as verification failure.
+            pass
+        if not verified:
+            # Signature verification failure.
+            logging.getLogger(__name__).info("Dropping Interest with failed signature: %s",
+              interest.getName().toUri())
+            return
 
         encoding = interest.getName().get(
           self._applicationBroadcastPrefix.size()).getValue()
