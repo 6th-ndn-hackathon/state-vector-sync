@@ -166,12 +166,13 @@ def main():
 
     memberDataPrefix = Name(hubPrefix).append(screenName).append(chatRoom)
 
-    stateVectorSync = StateVectorSync2018(onReceivedSyncState, None, memberDataPrefix,
-      Name("/ndn/broadcast/SvsChat").append(chatRoom), face, keyChain,
-      SigningInfo(), hmacKey, notificationInterestLifetime, onRegisterFailed)
+    def onInitialized():
+       stateVectorSync.publishNextSequenceNo()
 
-    stateVectorSync._setSequenceNumber("debug1", 10)
-    stateVectorSync.publishNextSequenceNo()
+    stateVectorSync = StateVectorSync2018(onReceivedSyncState, onInitialized,
+      memberDataPrefix, Name("/ndn/broadcast/SvsChat").append(chatRoom), face,
+      keyChain, SigningInfo(), hmacKey, notificationInterestLifetime,
+      onRegisterFailed)
 
     while True:
         face.processEvents()
