@@ -50,12 +50,12 @@ class StateVectorSync2018(object):
       for better error handling the callback should catch and properly
       handle any exceptions.
     :type onInitialized: function object
-    :param Name memberDataPrefix: The prefix used by this application instance
-      for application data and to identify this member. (If the application uses
-      a new session number on startup, it needs to include this in the
-      memberDataPrefix.) For example, "/my/local/prefix/ndnchat4/0K4wChff2v/123".
-      In the state vector, this member is identified by the string
-      memberDataPrefix.toUri().
+    :param Name applicationDataPrefix: The prefix used by this application
+      instance for others to fetch application data and to identify this member.
+      (If the application restarts with sequence 0 on startup, it needs to
+      include a unique session number in the applicationDataPrefix.) For example,
+      "/my/local/prefix/ndnchat4/0K4wChff2v/123". In the state vector, this
+      member is identified by the string applicationDataPrefix.toUri().
     :param Name applicationBroadcastPrefix: The broadcast name prefix including
       the application name. For example, "/ndn/broadcast/ChronoChat-0.3/ndnchat1".
       This makes a copy of the name.
@@ -78,16 +78,34 @@ class StateVectorSync2018(object):
       handle any exceptions.
     :type onRegisterFailed: function object
     :param int previousSequenceNumber (optional): The previously published
-      sequence number for the same memberDataPrefix. In case the
-      memberDataPrefix does not already include a unique session number, this
+      sequence number for the same applicationDataPrefix. In case the
+      applicationDataPrefix does not already include a unique session number, this
       can be used by the application to restore the state from a previous use.
       If omitted, this uses -1 so that the next published sequence number is 0.
     """
     def __init__(self, onReceivedSyncState, onInitialized,
-      memberDataPrefix, applicationBroadcastPrefix, face, keyChain,
+      applicationDataPrefix, applicationBroadcastPrefix, face, keyChain,
       signingParams, hmacKey, notificationInterestLifetime, onRegisterFailed,
       previousSequenceNumber = -1):
-        pass
+        self._onReceivedSyncState = onReceivedSyncState
+        self._onInitialized = onInitialized
+        self._applicationDataPrefixUri = applicationDataPrefix.toUri()
+        self._applicationBroadcastPrefix = Name(applicationBroadcastPrefix)
+        self._face = face
+        self._keyChain = keyChain
+        self._signingParams = signingParams
+        self._hmacKey = hmacKey
+        self._notificationInterestLifetime = notificationInterestLifetime
+        self._contentCache = MemoryContentCache(face)
+
+        self._stateVector = []  # list of SyncState
+        self._sequenceNo = previousSequenceNumber
+        self._enabled = True
+
+        # Register the prefix with the contentCache_ and use our own onInterest
+        #   as the onDataNotFound fallback.
+        self._contentCache.registerPrefix(
+          self._applicationBroadcastPrefix, onRegisterFailed, self._onInterest)
 
     class SyncState(object):
         """
@@ -118,25 +136,26 @@ class StateVectorSync2018(object):
             """
             return self._sequenceNo
 
-    def getMemberDataPrefixes(self):
+    def getProducerPrefixes(self):
         """
-        Get a copy of the current list of the Name URI for each member data
-        prefix (which is the member ID). You can use these in
-        getMemberSequenceNo(). This includes the prefix for this user.
+        Get a copy of the current list of the Name URI for each producer data
+        prefix (which is their member ID). You can use these in
+        getProducerSequenceNo(). This includes the prefix for this user.
 
-        :return: A copy of the list of each member data prefix.
+        :return: A copy of the list of each producer data prefix.
         :rtype: array of str
         """
         pass
 
-    def getMemberSequenceNo(self, memberDataPrefix):
+    def getProducerSequenceNo(self, producerDataPrefix):
         """
-        Get the current sequence number for the given memberDataPrefix in the
+        Get the current sequence number for the given producerDataPrefix in the
         current state vector.
 
-        :param std memberDataPrefix: The member data prefix as a Name URI string.
+        :param str producerDataPrefix: The producer's application data prefix as
+          a Name URI string (also the member ID).
         :return: The current sequence sequence number for the member, or -1 if
-          the memberDataPrefix is not in the state vector.
+          the producerDataPrefix is not in the state vector.
         :rtype: int
         """
         pass
@@ -165,3 +184,17 @@ class StateVectorSync2018(object):
         :rtype: int
         """
         return self._sequenceNo
+
+    def shutdown(self):
+        """
+        Unregister callbacks so that this does not respond to interests anymore.
+        If you will discard this StateVectorSync2018 object while your
+        application is still running, you should call shutdown() first.  After
+        calling this, you should not call publishNextSequenceNo() again since
+        the behavior will be undefined.
+        Note: Because this modifies internal data structures, your application
+        should make sure that it calls processEvents in the same thread as
+        shutdown() (which also modifies the data structures).
+        """
+        self._enabled = False
+        self._contentCache.unregisterAll()
