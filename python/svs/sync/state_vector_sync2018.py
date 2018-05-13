@@ -37,10 +37,10 @@ class StateVectorSync2018(object):
     make sure that it calls processEvents in the same thread as this
     constructor (which also modifies the data structures).
 
-    :param onReceivedSyncState: When StateVectorSync receives a state
-      vector, this calls onReceivedStateVector(stateVector) where stateVector
+    :param onReceivedSyncState: When StateVectorSync2018 receives a state
+      vector, this calls onReceivedSyncState(syncStates) where syncStates
       is the list of SyncState of only the members whose sequence number has
-      increased from the previous onReceivedStateVector callback. The callback
+      increased from the previous onReceivedSyncState callback. The callback
       should send interests to fetch the application data for the sequence
       numbers in the sync state.
       NOTE: The library will log any exceptions raised by this callback, but
@@ -140,6 +140,12 @@ class StateVectorSync2018(object):
             :rtype: int
             """
             return self._sequenceNo
+
+        def __str__(self):
+            return "SyncState(" + self._dataPrefixUri + str(self._sequenceNo) + ")"
+
+        def __repr__(self):
+            self.__str__()
 
     def getProducerPrefixes(self):
         """
