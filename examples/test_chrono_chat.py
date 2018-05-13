@@ -36,7 +36,7 @@ from pyndn.util import Blob
 from pyndn.security import SigningInfo
 from svs.sync import StateVectorSync2018
 
-# Define the Chat class here so that the ChronoChat demo is self-contained.
+# Define the Chat class here so that the demo is self-contained.
 class Chat(object):
     def __init__(self, screenName, chatRoom, hubPrefix, face, keyChain,
       certificateName):
@@ -64,7 +64,7 @@ class Chat(object):
 
         self._sync = StateVectorSync2018(
            self._sendInterest, self._initial, self._chatPrefix,
-           Name("/ndn/broadcast/ChronoChat-0.3").append(self._chatRoom),
+           Name("/ndn/broadcast/SvsChat").append(self._chatRoom),
            face, keyChain, SigningInfo(), hmacKey, self._syncLifetime,
            onRegisterFailed)
 
@@ -327,7 +327,7 @@ class Chat(object):
     @staticmethod
     def _getRandomString():
         """
-        Generate a random name for ChronoSync.
+        Generate a random name for the publisher data prefix.
         """
         seed = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM0123456789"
         result = ""
@@ -467,7 +467,7 @@ def promptAndInput(prompt):
         return input(prompt)
 
 def main():
-    # Uncomment these lines to print ChronoSync debug messages.
+    # Uncomment these lines to print StateVectorSync2018 debug messages.
     # logging.getLogger('').addHandler(logging.StreamHandler(sys.stdout))
     # logging.getLogger('').setLevel(logging.INFO)
 
