@@ -2,6 +2,7 @@
 #
 # Copyright (C) 2018 Regents of the University of California.
 # Author: Jeff Thompson <jefft0@remap.ucla.edu>
+# Author: Haitao Zhang <zhtaoxiang@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
