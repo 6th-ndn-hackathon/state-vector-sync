@@ -46,8 +46,8 @@ class StateVectorSync2018(object):
       for better error handling the callback should catch and properly
       handle any exceptions.
     :type onReceivedSyncState: function object
-    :param onInitialized: This calls onInitialized() when the first state
-      vector is received.
+    :param onInitialized: This calls onInitialized() when this has registered
+      the broadcast prefix and is initialized.
       NOTE: The library will log any exceptions raised by this callback, but
       for better error handling the callback should catch and properly
       handle any exceptions.
@@ -107,9 +107,10 @@ class StateVectorSync2018(object):
         self._sequenceNo = previousSequenceNumber
         self._enabled = True
 
-        # Register to receive broadcast interests
+        # Register to receive broadcast interests.
         self._face.registerPrefix(
-          self._applicationBroadcastPrefix, self._onInterest, onRegisterFailed)
+          self._applicationBroadcastPrefix, self._onInterest, onRegisterFailed,
+          self._onRegisterSuccess)
 
     class SyncState(object):
         """
@@ -198,10 +199,10 @@ class StateVectorSync2018(object):
         self._sequenceNo += 1
         self._setSequenceNumber(self._applicationDataPrefixUri, self._sequenceNo)
 
-        self._broadcastStateVector()
         logging.getLogger(__name__).info(
-          "Broadcast new seq no %s. state vector %s", str(self._sequenceNo),
+          "Broadcast new seq # %s. State vector %s", str(self._sequenceNo),
           str(self._stateVector))
+        self._broadcastStateVector()
 
     def getSequenceNo(self):
         """
@@ -341,8 +342,6 @@ class StateVectorSync2018(object):
         """
         Process a received broadcast interest.
         """
-        logging.getLogger(__name__).info("Received broadcast interest")
-
         # TODO: Verify the HMAC signature.
 
         encoding = interest.getName().get(
@@ -351,11 +350,20 @@ class StateVectorSync2018(object):
         logging.getLogger(__name__).info("Received broadcast state vector %s",
           str(receivedStateVector))
 
-        syncStates = self._mergeStateVector(receivedStateVector)
-        try:
-            self._onReceivedSyncState(syncStates)
-        except:
-            logging.exception("Error in onReceivedSyncState")
+        (syncStates, needToReply) = self._mergeStateVector(receivedStateVector)
+        if len(syncStates) > 0:
+            # Inform the application up new sync states.
+            try:
+                self._onReceivedSyncState(syncStates)
+            except:
+                logging.exception("Error in onReceivedSyncState")
+
+        if needToReply:
+            # Inform other members who may need to be updated.
+            logging.getLogger(__name__).info(
+              "Received state vector was outdated. Broadcast state vector %s",
+              str(self._stateVector))
+            self._broadcastStateVector()
 
     def _mergeStateVector(self, receivedStateVector):
         """
@@ -365,18 +373,32 @@ class StateVectorSync2018(object):
         :param dict<str,int> receivedStateVector: The received state vector
           dictionary where the key is the member ID string and the value is
           the sequence number.
-        :return: The list of new StateVectorSync2018.SyncState giving the
-          entries in myStateVector that were updated.
-        :rtype: list<StateVectorSync2018.SyncState>
+        :return: A tuple of (syncStates, needToReply) where syncStates is the
+          list of new StateVectorSync2018.SyncState giving the entries in
+          self._stateVector that were updated, and needToReply is True if
+          receivedStateVector is lacking more current information which was in
+          self._stateVector.
+        :rtype: (list<StateVectorSync2018.SyncState>, bool)
         """
+        needToReply = False
         result = []
+        if self._stateVector == receivedStateVector:
+            return (result, needToReply)
         for k, v in receivedStateVector.items():
-            mySequenceNumber = self._stateVector.get(k)
-            if mySequenceNumber == None or mySequenceNumber < v:
-                result.append(StateVectorSync2018.SyncState(k, v))
+            if self._stateVector.get(k) == None or self._stateVector.get(k) < v:
+                result.append(StateVectorSync2018.SyncState(k,v))
                 self._setSequenceNumber(k, v)
+        for k, v in self._stateVector.items():
+            if receivedStateVector.get(k) == None or receivedStateVector.get(k) < v:
+                needToReply = True
+                break
+        return (result, needToReply)
 
-        return result
+    def _onRegisterSuccess(self, prefix, registeredPrefixId):
+        try:
+            self._onInitialized()
+        except:
+            logging.exception("Error in onInitialized")
 
     @staticmethod
     def _dummyOnData(interest, data):
