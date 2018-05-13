@@ -120,6 +120,17 @@ DEFAULT_RSA_PRIVATE_KEY_DER = bytearray([
 def onRegisterFailed(prefix):
     print("Register failed for prefix " + prefix.toUri())
 
+def onReceivedSyncState(syncStates):
+    """
+    This is called by StateVectorSync2018 when it receives new sync states from
+    another member.
+
+    :param list<StateVectorSync2018.SyncState> syncStates The list of SyncState
+      of only the members whose sequence number has increased from the previous
+      onReceivedSyncState callback
+    """
+    print "onReceivedSyncState: " + str(syncStates)
+
 def promptAndInput(prompt):
     if sys.version_info[0] <= 2:
         return raw_input(prompt)
@@ -155,10 +166,11 @@ def main():
 
     memberDataPrefix = Name(hubPrefix).append(screenName).append(chatRoom)
 
-    stateVectorSync = StateVectorSync2018(None, None, memberDataPrefix,
+    stateVectorSync = StateVectorSync2018(onReceivedSyncState, None, memberDataPrefix,
       Name("/ndn/broadcast/SvsChat").append(chatRoom), face, keyChain,
       SigningInfo(), hmacKey, notificationInterestLifetime, onRegisterFailed)
 
+    stateVectorSync._setSequenceNumber("debug1", 10)
     stateVectorSync.publishNextSequenceNo()
 
     while True:
