@@ -120,7 +120,7 @@ class Chat(object):
         except ValueError:
             self._roster.append(self._userName)
             print("Member: " + self._screenName)
-            print(self._screenName + ": Join")
+            #debug print(self._screenName + ": Join")
             self._messageCacheAppend(chatbuf_pb2.ChatMessage.JOIN, "xxx")
 
     def _sendInterest(self, syncStates):
@@ -231,7 +231,7 @@ class Chat(object):
 
             if l == len(self._roster):
                 self._roster.append(nameAndSession)
-                print(name + ": Join")
+                #debug print(name + ": Join")
 
             # Set the alive timeout using the Interest timeout mechanism.
             # TODO: Are we sure using a "/local/timeout" interest is the best
