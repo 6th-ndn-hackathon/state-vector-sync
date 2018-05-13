@@ -142,7 +142,7 @@ class StateVectorSync2018(object):
             return self._sequenceNo
 
         def __str__(self):
-            return "SyncState(" + self._dataPrefixUri + str(self._sequenceNo) + ")"
+            return "SyncState(" + self._dataPrefixUri + ", " + str(self._sequenceNo) + ")"
 
         def __repr__(self):
             self.__str__()
