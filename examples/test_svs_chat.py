@@ -300,7 +300,7 @@ class Chat(object):
         Face.expressInterest.
         """
         sequenceNo = self._sync.getProducerSequenceNo(prefix)
-        nameAndSession = name + sessionNo
+        nameAndSession = name + str(sessionNo)
         try:
             n = self._roster.index(nameAndSession)
         except ValueError:
