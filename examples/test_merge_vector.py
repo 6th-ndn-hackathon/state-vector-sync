@@ -67,7 +67,7 @@ def main():
     stateVector["/user2"] = 2;
     receivedStateVector["/user1"] = 10;
     receivedStateVector["/user2"] = 1;
-    assert(mergeStateVector(stateVector, receivedStateVector));
+    print mergeStateVector(stateVector, receivedStateVector);
     assert(stateVector == {'/user1': 10, '/user2': 2});
     
     # mix scennario
@@ -81,11 +81,11 @@ def main():
 
     # Merge receivedStateVector into stateVector.
 def mergeStateVector(myStateVector, receivedStateVector):
-    updated = False;
+    result = []
     for k, v in receivedStateVector.items():
         if myStateVector.get(k) == None or myStateVector.get(k) < v:
-            updated = True;
-            myStateVector[k] = v;
-    return updated;
+            result.append(StateVectorSync2018.SyncState(k,v))
+            myStateVector[k] = v
+    return result
 
 main()
