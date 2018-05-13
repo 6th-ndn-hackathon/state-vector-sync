@@ -21,7 +21,6 @@ import bisect
 import logging
 from pyndn.name import Name
 from pyndn.interest import Interest
-from pyndn.data import Data
 from pyndn.security import KeyChain
 from pyndn.util.blob import Blob
 from pyndn.encoding.tlv.tlv_encoder import TlvEncoder
@@ -147,6 +146,14 @@ class StateVectorSync2018(object):
         def __repr__(self):
             return self.__str__()
 
+        def __eq__(self, other):
+            return (isinstance(other, StateVectorSync2018.SyncState) and
+              self._dataPrefixUri == other._dataPrefixUri and
+              self._sequenceNo == other._sequenceNo)
+
+        def __ne__(self, other):
+            return not self == other
+
     def getProducerPrefixes(self):
         """
         Get a copy of the current list of the Name URI for each producer data
@@ -191,15 +198,10 @@ class StateVectorSync2018(object):
         self._sequenceNo += 1
         self._setSequenceNumber(self._applicationDataPrefixUri, self._sequenceNo)
 
-        interest = self._makeNotificationInterest()
-
-        # TODO: Use onData to receive a correction state vector.
-        def dummyOnData(interest, data):
-            pass
-        # A response is not required, so ignore the timeout.
-        self._face.expressInterest(interest, dummyOnData)
+        self._broadcastStateVector()
         logging.getLogger(__name__).info(
-          "Sent broadcast interest with state vector %s", str(self._stateVector))
+          "Broadcast new seq no %s. state vector %s", str(self._sequenceNo),
+          str(self._stateVector))
 
     def getSequenceNo(self):
         """
@@ -311,6 +313,15 @@ class StateVectorSync2018(object):
 
         return interest
 
+    def _broadcastStateVector(self):
+        """
+        Call _makeNotificationInterest() and then expressInterest to broadcast
+        the notification interest.
+        """
+        interest = self._makeNotificationInterest()
+        # A response is not required, so ignore the timeout and Data packet.
+        self._face.expressInterest(interest, StateVectorSync2018._dummyOnData)
+
     def _setSequenceNumber(self, memberId, sequenceNumber):
         """
         An internal method to update the _stateVector by setting memberId to
@@ -366,6 +377,14 @@ class StateVectorSync2018(object):
                 self._setSequenceNumber(k, v)
 
         return result
+
+    @staticmethod
+    def _dummyOnData(interest, data):
+        """
+        This is a do-nothing onData for using expressInterest when we don't
+        expect a response Data packet.
+        """
+        pass
 
     # Assign TLV types as crtitical values for application use.
     TLV_StateVector = 129
