@@ -115,9 +115,9 @@ class StateVectorSync2018(object):
 
     class SyncState(object):
         """
-        A SyncState holds the entries of a state vector which is passed to the
-        onReceivedSyncState callback which was given to the StateVectorSync2018
-        constructor.
+        A SyncState holds the values of one entry of a state vector which is
+        passed to the onReceivedSyncState callback which was given to the
+        StateVectorSync2018 constructor.
         """
         def __init__(self, dataPrefixUri, sequenceNo):
             self._dataPrefixUri = dataPrefixUri
