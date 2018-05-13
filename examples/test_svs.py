@@ -9,7 +9,9 @@ from pyndn import Data
 from pyndn import Face
 from pyndn.security import KeyChain
 from pyndn.security import SafeBag
+from pyndn.security import SigningInfo
 from pyndn.util import Blob
+from pyndn.util.common import Common
 from svs.sync import StateVectorSync2018
 
 DEFAULT_RSA_PUBLIC_KEY_DER = bytearray([
@@ -118,10 +120,16 @@ DEFAULT_RSA_PRIVATE_KEY_DER = bytearray([
 def onRegisterFailed(prefix):
     print("Register failed for prefix " + prefix.toUri())
 
+def promptAndInput(prompt):
+    if sys.version_info[0] <= 2:
+        return raw_input(prompt)
+    else:
+        return input(prompt)
+
 def main():
     # Uncomment these lines to print StateVectorSync debug messages.
-    # logging.getLogger('').addHandler(logging.StreamHandler(sys.stdout))
-    # logging.getLogger('').setLevel(logging.INFO)
+    logging.getLogger('').addHandler(logging.StreamHandler(sys.stdout))
+    logging.getLogger('').setLevel(logging.INFO)
 
     face = Face("localhost")
 
@@ -132,6 +140,26 @@ def main():
        Blob(DEFAULT_RSA_PRIVATE_KEY_DER, False),
        Blob(DEFAULT_RSA_PUBLIC_KEY_DER, False)))
     face.setCommandSigningInfo(keyChain, keyChain.getDefaultCertificateName())
+
+    screenName = promptAndInput("Enter your user name: ")
+
+    hubPrefix = "ndn/edu/ucla/remap"
+    chatRoom = "ndnchat"
+
+    notificationInterestLifetime = 5000.0
+    sessionNumber = int(round(Common.getNowMilliseconds() / 1000.0))
+    hmacKey = Blob(bytearray([
+       0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+      16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+    ]))
+
+    memberDataPrefix = Name(hubPrefix).append(screenName).append(chatRoom)
+
+    stateVectorSync = StateVectorSync2018(None, None, memberDataPrefix,
+      Name("/ndn/broadcast/SvsChat").append(chatRoom), face, keyChain,
+      SigningInfo(), hmacKey, notificationInterestLifetime, onRegisterFailed)
+
+    stateVectorSync.publishNextSequenceNo()
 
     while True:
         face.processEvents()
