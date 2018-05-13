@@ -33,7 +33,8 @@ from pyndn import Face
 from pyndn.security import KeyChain
 from pyndn.security import SafeBag
 from pyndn.util import Blob
-from pyndn.sync import ChronoSync2013
+from pyndn.security import SigningInfo
+from svs.sync import StateVectorSync2018
 
 # Define the Chat class here so that the ChronoChat demo is self-contained.
 class Chat(object):
@@ -48,19 +49,23 @@ class Chat(object):
         self._messageCache = [] # of CachedMessage
         self._roster = [] # of str
         self._maxMessageCacheLength = 100
-        self._isRecoverySyncState = True
+        self._isRecoverySyncState = False
         self._syncLifetime = 5000.0 # milliseconds
 
         # This should only be called once, so get the random string here.
         self._chatPrefix = Name(hubPrefix).append(self._chatRoom).append(
           self._getRandomString())
-        session = int(round(self.getNowMilliseconds() / 1000.0))
+        session = 10000000000
         self._userName = self._screenName + str(session)
+        hmacKey = Blob(bytearray([
+           0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+          16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+        ]))
 
-        self._sync = ChronoSync2013(
+        self._sync = StateVectorSync2018(
            self._sendInterest, self._initial, self._chatPrefix,
-           Name("/ndn/broadcast/ChronoChat-0.3").append(self._chatRoom), session,
-           face, keyChain, certificateName, self._syncLifetime,
+           Name("/ndn/broadcast/ChronoChat-0.3").append(self._chatRoom),
+           face, keyChain, SigningInfo(), hmacKey, self._syncLifetime,
            onRegisterFailed)
 
         face.registerPrefix(self._chatPrefix, self._onInterest, onRegisterFailed)
@@ -118,14 +123,12 @@ class Chat(object):
             print(self._screenName + ": Join")
             self._messageCacheAppend(chatbuf_pb2.ChatMessage.JOIN, "xxx")
 
-    def _sendInterest(self, syncStates, isRecovery):
+    def _sendInterest(self, syncStates):
         """
-        Send a Chat Interest to fetch chat messages after the user gets the Sync
-        data packet back but will not send interest.
+        This is called by StateVectorSync2018 when it receives new sync states 
+        from another member. Send a Chat Interest to fetch chat messages after
+        the user gets the Sync data packet back but will not send interest.
         """
-        # This is used by _onData to decide whether to display the chat messages.
-        self._isRecoverySyncState = isRecovery
-
         sendList = []       # of str
         sessionNoList = []  # of int
         sequenceNoList = [] # of int
@@ -133,7 +136,7 @@ class Chat(object):
             syncState = syncStates[j]
             nameComponents = Name(syncState.getDataPrefix())
             tempName = nameComponents.get(-1).toEscapedString()
-            sessionNo = syncState.getSessionNo()
+            sessionNo = 10000000000
             if not tempName == self._screenName:
                 index = -1
                 for k in range(len(sendList)):
