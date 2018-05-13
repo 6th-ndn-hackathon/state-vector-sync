@@ -17,14 +17,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # A copy of the GNU Lesser General Public License is in the file COPYING.
 
+import bisect
 import logging
 from pyndn.name import Name
 from pyndn.interest import Interest
 from pyndn.data import Data
+from pyndn.security import KeyChain
 from pyndn.util.blob import Blob
 from pyndn.encoding.tlv.tlv_encoder import TlvEncoder
 from pyndn.encoding.tlv.tlv_decoder import TlvDecoder
-from pyndn.util.memory_content_cache import MemoryContentCache
 
 class StateVectorSync2018(object):
     """
@@ -98,7 +99,6 @@ class StateVectorSync2018(object):
         self._signingParams = signingParams
         self._hmacKey = hmacKey
         self._notificationInterestLifetime = notificationInterestLifetime
-        self._contentCache = MemoryContentCache(face)
 
         # The dictionary key is member ID string. The value is the sequence number.
         self._stateVector = {}
@@ -108,10 +108,9 @@ class StateVectorSync2018(object):
         self._sequenceNo = previousSequenceNumber
         self._enabled = True
 
-        # Register the prefix with the contentCache_ and use our own onInterest
-        #   as the onDataNotFound fallback.
-        self._contentCache.registerPrefix(
-          self._applicationBroadcastPrefix, onRegisterFailed, self._onInterest)
+        # Register to receive broadcast interests
+        self._face.registerPrefix(
+          self._applicationBroadcastPrefix, self._onInterest, onRegisterFailed)
 
     class SyncState(object):
         """
@@ -183,7 +182,18 @@ class StateVectorSync2018(object):
         make sure that it calls processEvents in the same thread as
         publishNextSequenceNo() (which also modifies the data structures).
         """
-        pass
+        self._sequenceNo += 1
+        self._setSequenceNumber(self._applicationDataPrefixUri, self._sequenceNo)
+
+        interest = self._makeNotificationInterest()
+
+        # TODO: Use onData to receive a correction state vector.
+        def dummyOnData(interest, data):
+            pass
+        # A response is not required, so ignore the timeout.
+        self._face.expressInterest(interest, dummyOnData)
+        logging.getLogger(__name__).info(
+          "Sent broadcast interest with state vector %s", str(self._stateVector))
 
     def getSequenceNo(self):
         """
@@ -275,6 +285,54 @@ class StateVectorSync2018(object):
         decoder.finishNestedTlvs(endOffset)
 
         return stateVector
+
+    def _makeNotificationInterest(self):
+        """
+        Make and return a new Interest where the name is
+        _applicationBroadcastPrefix plus the encoding of _stateVector. Also
+        use _hmacKey to sign it with HmacWithSha256.
+
+        :return: The new signed notification interest.
+        :rtype: Interest
+        """
+        interest = Interest(self._applicationBroadcastPrefix)
+        interest.setInterestLifetimeMilliseconds(self._notificationInterestLifetime)
+        interest.getName().append(StateVectorSync2018.encodeStateVector
+          (self._stateVector, self._sortedStateVectorKeys))
+
+        # TODO: Should we just use key name /A ?
+        KeyChain.signWithHmacWithSha256(interest, self._hmacKey, Name("/A"))
+
+        return interest
+
+    def _setSequenceNumber(self, memberId, sequenceNumber):
+        """
+        An internal method to update the _stateVector by setting memberId to
+        sequenceNumber. This is needed because we also have to update
+        _sortedStateVectorKeys.
+
+        :param str memberId: The member ID string.
+        :param int sequenceNumber: The sequence number for the member.
+        """
+        if not memberId in self._sortedStateVectorKeys:
+            # We need to keep _sortedStateVectorKeys synced with _stateVector.
+            bisect.insort(self._sortedStateVectorKeys, memberId)
+
+        self._stateVector[memberId] = sequenceNumber
+
+    def _onInterest(self, prefix, interest, face, interestFilterId, filter):
+        """
+        Process a received broadcast interest.
+        """
+        logging.getLogger(__name__).info("Received broadcast interest")
+
+        # TODO: Verify the HMAC signature.
+
+        encoding = interest.getName().get(
+          self._applicationBroadcastPrefix.size()).getValue()
+        receivedStateVector = StateVectorSync2018.decodeStateVector(encoding)
+        logging.getLogger(__name__).info("Received broadcast state vector %s",
+          str(receivedStateVector))
 
     # Assign TLV types as crtitical values for application use.
     TLV_StateVector = 129
